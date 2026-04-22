@@ -1,0 +1,17 @@
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+WORKDIR /app
+COPY pom.xml .
+# Try to resolve dependencies (may fail if some internal plugins are missing, but usually speeds up)
+RUN mvn dependency:go-offline || true
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
+
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -33,40 +33,70 @@ public class OrderController {
         this.restClient = restClient;
     }
 
+    public static class OrderRequest {
+        private String type;
+        private List<Map<String, Object>> items;
+        
+        public String getType() { return type; }
+        public void setType(String type) { this.type = type; }
+        public List<Map<String, Object>> getItems() { return items; }
+        public void setItems(List<Map<String, Object>> items) { this.items = items; }
+    }
+
     @PostMapping("/place")
-    public ResponseEntity<?> placeOrder(Authentication authentication, HttpServletRequest request) {
+    public ResponseEntity<?> placeOrder(@RequestBody OrderRequest orderRequest, Authentication authentication, HttpServletRequest request) {
         String username = authentication.getName();
         String authHeader = request.getHeader("Authorization");
 
-        // 1. Fetch Cart
-        Map<String, Object> cart = restClient.get()
-                .uri(cartServiceUrl + "/cart")
-                .header("Authorization", authHeader)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        List<Map<String, Object>> itemsToOrder;
 
-        if (cart == null || !cart.containsKey("items")) {
-            return ResponseEntity.badRequest().body("Cart is empty or could not be fetched.");
+        if ("BUY_NOW".equalsIgnoreCase(orderRequest.getType())) {
+            itemsToOrder = orderRequest.getItems();
+            if (itemsToOrder == null || itemsToOrder.isEmpty()) {
+                return ResponseEntity.badRequest().body("No items provided for BUY_NOW.");
+            }
+        } else {
+            // Default to CART mode
+            Map<String, Object> cart;
+            try {
+                cart = restClient.get()
+                        .uri(cartServiceUrl + "/cart")
+                        .header("Authorization", authHeader)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body("Could not fetch cart.");
+            }
+
+            if (cart == null || !cart.containsKey("items")) {
+                return ResponseEntity.badRequest().body("Cart is empty or could not be fetched.");
+            }
+
+            itemsToOrder = (List<Map<String, Object>>) cart.get("items");
         }
 
-        List<Map<String, Object>> items = (List<Map<String, Object>>) cart.get("items");
-        if (items.isEmpty()) {
-            return ResponseEntity.badRequest().body("Cart is empty.");
+        if (itemsToOrder.isEmpty()) {
+            return ResponseEntity.badRequest().body("No items to order.");
         }
 
         Order order = new Order();
         order.setUsername(username);
         BigDecimal totalAmount = BigDecimal.ZERO;
 
-        for (Map<String, Object> item : items) {
+        for (Map<String, Object> item : itemsToOrder) {
             Long productId = ((Number) item.get("productId")).longValue();
             Integer quantity = (Integer) item.get("quantity");
 
             // Fetch Product details to verify stock and price
-            Map<String, Object> product = restClient.get()
-                    .uri(productServiceUrl + "/products/" + productId)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+            Map<String, Object> product;
+            try {
+                product = restClient.get()
+                        .uri(productServiceUrl + "/products/" + productId)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body("Product " + productId + " does not exist.");
+            }
             
             if (product == null) {
                 return ResponseEntity.badRequest().body("Product " + productId + " does not exist.");
@@ -74,18 +104,23 @@ public class OrderController {
 
             Integer stock = (Integer) product.get("stock");
             if (stock < quantity) {
-                return ResponseEntity.badRequest().body("Not enough stock for product " + productId);
+                // Return 409 Conflict if insufficient stock
+                return ResponseEntity.status(409).body("Not enough stock for product " + productId);
             }
 
             BigDecimal price = new BigDecimal(product.get("price").toString());
 
             // Reduce stock synchronously
-            restClient.patch()
-                    .uri(productServiceUrl + "/products/" + productId + "/stock")
-                    .header("Authorization", authHeader)
-                    .body(Map.of("quantity", -quantity))
-                    .retrieve()
-                    .toBodilessEntity();
+            try {
+                restClient.patch()
+                        .uri(productServiceUrl + "/products/" + productId + "/stock")
+                        .header("Authorization", authHeader)
+                        .body(Map.of("quantity", -quantity))
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (Exception e) {
+                 return ResponseEntity.status(409).body("Failed to update stock for product " + productId);
+            }
 
             OrderItem orderItem = new OrderItem();
             orderItem.setProductId(productId);
@@ -100,12 +135,18 @@ public class OrderController {
         order.setTotalAmount(totalAmount);
         orderRepository.save(order);
 
-        // Clear Cart
-        restClient.delete()
-                .uri(cartServiceUrl + "/cart/clear")
-                .header("Authorization", authHeader)
-                .retrieve()
-                .toBodilessEntity();
+        // Clear Cart ONLY if mode is CART
+        if (!"BUY_NOW".equalsIgnoreCase(orderRequest.getType())) {
+            try {
+                restClient.delete()
+                        .uri(cartServiceUrl + "/cart/clear")
+                        .header("Authorization", authHeader)
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (Exception e) {
+                // Log or ignore failure to clear cart
+            }
+        }
 
         return ResponseEntity.ok(order);
     }

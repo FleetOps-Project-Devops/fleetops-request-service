@@ -1,4 +1,4 @@
-﻿package com.fleetops.request.entity;
+package com.fleetops.request.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;

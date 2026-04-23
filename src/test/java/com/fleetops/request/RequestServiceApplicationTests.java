@@ -1,4 +1,4 @@
-﻿package com.fleetops.request;
+package com.fleetops.request;
 
 import com.fleetops.request.entity.ServiceRequest;
 import com.fleetops.request.entity.ServiceRequest.Priority;

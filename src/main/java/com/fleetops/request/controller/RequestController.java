@@ -1,8 +1,9 @@
-package com.cloudcart.order.controller;
+﻿package com.fleetops.request.controller;
 
-import com.cloudcart.order.entity.ServiceRequest;
-import com.cloudcart.order.entity.ServiceRequest.RequestStatus;
-import com.cloudcart.order.service.ServiceRequestService;
+import com.fleetops.request.entity.ServiceRequest;
+import com.fleetops.request.entity.ServiceRequest.RequestStatus;
+import com.fleetops.request.service.ServiceRequestService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -61,12 +62,16 @@ public class RequestController {
     @PostMapping
     @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN')")
     public ResponseEntity<?> createRequest(@RequestBody ServiceRequest request, Authentication authentication, HttpServletRequest httpRequest) {
-        request.setRequestedBy(authentication.getName());
         try {
-            ServiceRequest created = requestService.createRequest(request);
+            String token = httpRequest.getHeader("Authorization");
+            boolean isDriver = authentication.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_DRIVER"));
+            ServiceRequest created = requestService.createRequest(request, authentication.getName(), token, isDriver);
             return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Vehicle already has an active service request.");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
         }
@@ -88,6 +93,8 @@ public class RequestController {
                     .orElse(ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body("Invalid status");
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
         }
@@ -95,13 +102,20 @@ public class RequestController {
 
     @PatchMapping("/{id}/assign")
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
-    public ResponseEntity<ServiceRequest> assignTechnician(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<?> assignTechnician(@PathVariable Long id,
+                                              @RequestBody Map<String, String> payload,
+                                              HttpServletRequest httpRequest) {
         if (!payload.containsKey("technician")) {
             return ResponseEntity.badRequest().build();
         }
-        return requestService.assignTechnician(id, payload.get("technician"))
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            String token = httpRequest.getHeader("Authorization");
+            return requestService.assignTechnician(id, payload.get("technician"), token)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
     
     @PatchMapping("/{id}/complete")
@@ -115,8 +129,11 @@ public class RequestController {
             return requestService.completeRequest(id, resolutionNotes, downtimeHours, token)
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (RuntimeException e) {
              return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
         }
     }
 }
+

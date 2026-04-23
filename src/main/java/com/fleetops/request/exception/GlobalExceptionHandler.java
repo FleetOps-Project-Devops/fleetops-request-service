@@ -1,4 +1,4 @@
-package com.cloudcart.order.exception;
+﻿package com.fleetops.request.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,3 +20,4 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
+

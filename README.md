@@ -1,48 +1,44 @@
-# 📦 CloudCart Order Service
+# 📋 FleetOps Request Service
 
-The Order Processing service for the CloudCart E-commerce platform. It acts as an orchestrator during the checkout process, communicating with the Product and Cart services to ensure transactional integrity.
+The Request Service orchestrates the **Service Request workflow** within the FleetOps Vehicle Maintenance Platform. It handles the lifecycle of maintenance and breakdown reports, from initiation to completion.
 
 ## 🛠️ Tech Stack
 *   **Framework:** Spring Boot 3.4
-*   **Database:** PostgreSQL (uses `order_db`)
-*   **HTTP Client:** Spring `RestClient` for inter-service communication
-*   **Security:** JWT Validation (Stateless)
+*   **Database:** PostgreSQL (uses `request_db`)
+*   **Inter-Service Communication:** Spring `RestClient`
+*   **Authentication:** Stateless JWT (Validated via `JwtAuthenticationFilter`)
 
 ## 🎯 Responsibilities
-*   **Dual-Mode Checkout:** Supports placing orders directly via "Buy Now" (single item, bypassing the cart) or via "Cart Checkout" (processing all items in the user's cart).
-*   **Stock Validation:** Synchronously verifies product availability with the Product Service before confirming an order.
-*   **Atomic Stock Deduction:** Requests the Product Service to decrement stock, handling potential `409 Conflict` errors if stock is insufficient.
-*   **Cart Cleanup:** Automatically instructs the Cart Service to clear the user's cart upon a successful cart-based checkout.
-*   **Price Snapshotting:** Records the price of each item at the exact time of purchase (`priceAtTime`) for accurate historical records.
+*   **Workflow State Machine:** Manages the transition of requests through `OPEN` -> `PENDING_APPROVAL` -> `IN_PROGRESS` -> `COMPLETED`.
+*   **Vehicle Sync:** Communicates with the `vehicle-service` to transition a vehicle's status (e.g., to `IN_SERVICE`) when a request is approved.
+*   **Task Finalization:** Converts pending tasks from the `maintenance-service` into a formal Service Request.
 
 ## 📡 API Endpoints
 
-| Method | Endpoint | Auth Required | Description |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/orders/place` | Yes (JWT) | Place a new order. Payload specifies `type` (`BUY_NOW` or `CART`). |
-| `GET` | `/orders` | Yes (JWT) | Retrieve the authenticated user's order history. |
-| `GET` | `/orders/{id}` | Yes (JWT) | Retrieve details for a specific order (owner only). |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/requests/place` | JWT | Formalize queued tasks into a Service Request |
+| `GET` | `/requests` | JWT | Get current user's request history or all requests (Manager/Admin) |
+| `PATCH` | `/requests/{id}/status` | MANAGER/ADMIN | Progress the state of a service request |
 
 ## 🚀 Running Locally
 
 ### Prerequisites
-*   Java 17+
+*   Java 21
 *   Maven
-*   PostgreSQL running locally (with `order_db` created)
-*   **Product Service** running (default: `http://localhost:8081`)
-*   **Cart Service** running (default: `http://localhost:8082`)
+*   PostgreSQL running locally (with `request_db` created)
+*   `vehicle-service` and `maintenance-service` running (required for full workflow integration)
 
 ### Environment Variables
-
 ```bash
 export JWT_SECRET=your-super-secret-key-minimum-32-chars
-export PRODUCT_SERVICE_URL=http://localhost:8081
-export CART_SERVICE_URL=http://localhost:8082
-mvn spring-boot:run
+export VEHICLE_SERVICE_URL=http://localhost:8081  # Adjust port as necessary
+export MAINTENANCE_SERVICE_URL=http://localhost:8082 # Adjust port as necessary
+./mvnw spring-boot:run
 ```
 
 ## 🐳 Docker
 
 ```bash
-docker build -t cloudcart-order-service:v1.0.0 .
+docker build -t fleetops-request-service:v1.0.0 .
 ```

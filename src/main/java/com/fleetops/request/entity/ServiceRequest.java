@@ -1,10 +1,10 @@
-package com.cloudcart.order.entity;
+﻿package com.fleetops.request.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * ServiceRequest entity — the core workflow object of FleetOps.
+ * ServiceRequest entity â€” the core workflow object of FleetOps.
  *
  * Status lifecycle (strict state machine):
  *   OPEN -> PENDING_APPROVAL -> APPROVED -> ASSIGNED -> IN_PROGRESS -> COMPLETED
@@ -80,6 +80,10 @@ public class ServiceRequest {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -130,4 +134,6 @@ public class ServiceRequest {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getVersion() { return version; }
 }
+

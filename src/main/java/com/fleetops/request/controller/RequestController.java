@@ -94,7 +94,7 @@ public class RequestController {
             String token = httpRequest.getHeader("Authorization");
             
             return requestService.updateRequestStatus(id, newStatus, authentication.getName(), token)
-                    .map(ResponseEntity::ok)
+                    .map(updated -> ResponseEntity.<Object>ok(updated))
                     .orElse(buildError(HttpStatus.NOT_FOUND, "Request not found", httpRequest.getRequestURI()));
         } catch (IllegalArgumentException e) {
             return buildError(HttpStatus.BAD_REQUEST, "Invalid status", httpRequest.getRequestURI());
@@ -116,7 +116,7 @@ public class RequestController {
         try {
             String token = httpRequest.getHeader("Authorization");
             return requestService.assignTechnician(id, payload.get("technician"), token)
-                    .map(ResponseEntity::ok)
+                    .map(updated -> ResponseEntity.<Object>ok(updated))
                     .orElse(buildError(HttpStatus.NOT_FOUND, "Request not found", httpRequest.getRequestURI()));
         } catch (IllegalStateException e) {
             return buildError(HttpStatus.CONFLICT, e.getMessage(), httpRequest.getRequestURI());
@@ -134,7 +134,7 @@ public class RequestController {
         
         try {
             return requestService.completeRequest(id, resolutionNotes, downtimeHours, token)
-                    .map(ResponseEntity::ok)
+                    .map(updated -> ResponseEntity.<Object>ok(updated))
                     .orElse(buildError(HttpStatus.NOT_FOUND, "Request not found", httpRequest.getRequestURI()));
         } catch (IllegalStateException e) {
             return buildError(HttpStatus.CONFLICT, e.getMessage(), httpRequest.getRequestURI());

@@ -1,7 +1,8 @@
-package com.fleetops.request.controller;
+﻿package com.fleetops.request.controller;
 
 import com.fleetops.request.entity.ServiceRequest;
 import com.fleetops.request.entity.ServiceRequest.RequestStatus;
+import com.fleetops.request.exception.DownstreamServiceException;
 import com.fleetops.request.service.ServiceRequestService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -69,11 +72,13 @@ public class RequestController {
             ServiceRequest created = requestService.createRequest(request, authentication.getName(), token, isDriver);
             return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+            return buildError(HttpStatus.CONFLICT, e.getMessage(), httpRequest.getRequestURI());
+        } catch (IllegalArgumentException e) {
+            return buildError(HttpStatus.BAD_REQUEST, e.getMessage(), httpRequest.getRequestURI());
         } catch (DataIntegrityViolationException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("Vehicle already has an active service request.");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
+            return buildError(HttpStatus.CONFLICT, "Vehicle already has an active service request.", httpRequest.getRequestURI());
+        } catch (DownstreamServiceException e) {
+            return buildError(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), httpRequest.getRequestURI());
         }
     }
 
@@ -81,7 +86,7 @@ public class RequestController {
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<?> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload, Authentication authentication, HttpServletRequest httpRequest) {
         if (!payload.containsKey("status")) {
-            return ResponseEntity.badRequest().body("Missing 'status' field");
+            return buildError(HttpStatus.BAD_REQUEST, "Missing 'status' field", httpRequest.getRequestURI());
         }
 
         try {
@@ -90,13 +95,13 @@ public class RequestController {
             
             return requestService.updateRequestStatus(id, newStatus, authentication.getName(), token)
                     .map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+                    .orElse(buildError(HttpStatus.NOT_FOUND, "Request not found", httpRequest.getRequestURI()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body("Invalid status");
+            return buildError(HttpStatus.BAD_REQUEST, "Invalid status", httpRequest.getRequestURI());
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
+            return buildError(HttpStatus.CONFLICT, e.getMessage(), httpRequest.getRequestURI());
+        } catch (DownstreamServiceException e) {
+            return buildError(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), httpRequest.getRequestURI());
         }
     }
 
@@ -106,15 +111,17 @@ public class RequestController {
                                               @RequestBody Map<String, String> payload,
                                               HttpServletRequest httpRequest) {
         if (!payload.containsKey("technician")) {
-            return ResponseEntity.badRequest().build();
+            return buildError(HttpStatus.BAD_REQUEST, "Missing 'technician' field", httpRequest.getRequestURI());
         }
         try {
             String token = httpRequest.getHeader("Authorization");
             return requestService.assignTechnician(id, payload.get("technician"), token)
                     .map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+                    .orElse(buildError(HttpStatus.NOT_FOUND, "Request not found", httpRequest.getRequestURI()));
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+            return buildError(HttpStatus.CONFLICT, e.getMessage(), httpRequest.getRequestURI());
+        } catch (DownstreamServiceException e) {
+            return buildError(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), httpRequest.getRequestURI());
         }
     }
     
@@ -128,12 +135,24 @@ public class RequestController {
         try {
             return requestService.completeRequest(id, resolutionNotes, downtimeHours, token)
                     .map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+                    .orElse(buildError(HttpStatus.NOT_FOUND, "Request not found", httpRequest.getRequestURI()));
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        } catch (RuntimeException e) {
-             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
+            return buildError(HttpStatus.CONFLICT, e.getMessage(), httpRequest.getRequestURI());
+        } catch (IllegalArgumentException e) {
+            return buildError(HttpStatus.BAD_REQUEST, e.getMessage(), httpRequest.getRequestURI());
+        } catch (DownstreamServiceException e) {
+             return buildError(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), httpRequest.getRequestURI());
         }
+    }
+
+    private ResponseEntity<Map<String, Object>> buildError(HttpStatus status, String message, String path) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", status.value());
+        body.put("error", status.getReasonPhrase());
+        body.put("message", message);
+        body.put("path", path);
+        return ResponseEntity.status(status).body(body);
     }
 }
 

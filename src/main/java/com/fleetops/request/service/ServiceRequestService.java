@@ -1,8 +1,9 @@
-package com.fleetops.request.service;
+﻿package com.fleetops.request.service;
 
 import com.fleetops.request.entity.ServiceRequest;
 import com.fleetops.request.entity.ServiceRequest.Priority;
 import com.fleetops.request.entity.ServiceRequest.RequestStatus;
+import com.fleetops.request.exception.DownstreamServiceException;
 import com.fleetops.request.repository.ServiceRequestRepository;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
@@ -117,7 +118,7 @@ public class ServiceRequestService {
                 }
             } catch (Exception e) {
                 log.error("Failed to sync vehicle status with Vehicle Service. Request ID: {}. Error: {}", id, e.getMessage());
-                throw new RuntimeException("Service unavailable. Failed to sync with Vehicle Service.");
+                throw new DownstreamServiceException("Service unavailable. Failed to sync with Vehicle Service.", e);
             }
 
             return repository.save(request);
@@ -179,7 +180,7 @@ public class ServiceRequestService {
             } catch (RestClientException e) {
                 log.warn("Attempt {} failed to update vehicle status: {}", i + 1, e.getMessage());
                 if (i == maxRetries) {
-                    throw e;
+                    throw new DownstreamServiceException("Failed to update vehicle status in Vehicle Service.", e);
                 }
             }
         }
@@ -226,7 +227,12 @@ public class ServiceRequestService {
         }
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
-        ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+        ResponseEntity<Map> response;
+        try {
+            response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+        } catch (RestClientException e) {
+            throw new DownstreamServiceException("Failed to fetch vehicle details from Vehicle Service.", e);
+        }
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
             throw new IllegalStateException("Vehicle not found or unavailable.");
         }

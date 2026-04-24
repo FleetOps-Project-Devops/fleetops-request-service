@@ -12,7 +12,8 @@ on:
       - develop
 
 permissions:
-  contents: read
+  contents: write
+  security-events: write
 
 concurrency:
   group: request-service-ci-${{ github.ref }}

@@ -1,19 +1,19 @@
-# 📋 FleetOps Request Service
+# FleetOps Request Service
 
 The Request Service orchestrates the **Service Request workflow** within the FleetOps Vehicle Maintenance Platform. It handles the lifecycle of maintenance and breakdown reports, from initiation to completion.
 
-## 🛠️ Tech Stack
+## Tech Stack
 *   **Framework:** Spring Boot 3.4
 *   **Database:** PostgreSQL (uses `request_db`)
 *   **Inter-Service Communication:** Spring `RestClient`
 *   **Authentication:** Stateless JWT (Validated via `JwtAuthenticationFilter`)
 
-## 🎯 Responsibilities
+## Responsibilities
 *   **Workflow State Machine:** Manages the transition of requests through `OPEN` -> `PENDING_APPROVAL` -> `IN_PROGRESS` -> `COMPLETED`.
 *   **Vehicle Sync:** Communicates with the `vehicle-service` to transition a vehicle's status (e.g., to `IN_SERVICE`) when a request is approved.
 *   **Task Finalization:** Converts pending tasks from the `maintenance-service` into a formal Service Request.
 
-## 📡 API Endpoints
+## API Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -21,7 +21,7 @@ The Request Service orchestrates the **Service Request workflow** within the Fle
 | `GET` | `/requests` | JWT | Get current user's request history or all requests (Manager/Admin) |
 | `PATCH` | `/requests/{id}/status` | MANAGER/ADMIN | Progress the state of a service request |
 
-## 🚀 Running Locally
+## Running Locally
 
 ### Prerequisites
 *   Java 21
@@ -37,7 +37,7 @@ export MAINTENANCE_SERVICE_URL=http://localhost:8082 # Adjust port as necessary
 ./mvnw spring-boot:run
 ```
 
-## 🐳 Docker
+## Docker
 
 ```bash
 docker build -t fleetops-request-service:v1.0.0 .

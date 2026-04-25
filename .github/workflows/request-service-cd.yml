@@ -16,13 +16,10 @@ jobs:
   cd-dev:
     name: CD - Dev Deployment
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop' }}
-    permissions:
-      contents: write
-    uses: FleetOps-Project-Devops/fleetops-github-workflows/.github/workflows/common_cd.yml@main
+    uses: FleetOps-Project-Devops/fleetops-github-workflows/.github/workflows/cd-dev.yml@main
     with:
       service-name: request-service
       ci-workflow-name: Request Service CI
-      deploy-env: dev
     secrets:
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
@@ -31,13 +28,10 @@ jobs:
   cd-prod:
     name: CD - Prod Deployment
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
-    permissions:
-      contents: write
-    uses: FleetOps-Project-Devops/fleetops-github-workflows/.github/workflows/common_cd.yml@main
+    uses: FleetOps-Project-Devops/fleetops-github-workflows/.github/workflows/cd-prod.yml@main
     with:
       service-name: request-service
       ci-workflow-name: Request Service CI
-      deploy-env: prod
     secrets:
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
